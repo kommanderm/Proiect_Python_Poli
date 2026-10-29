@@ -132,7 +132,8 @@ Interfața se adaptează automat la tema luminoasă sau întunecată a sistemulu
 | SQLite | inclus în Python | baza de date locală |
 | Socket.IO (client JS) | 4.8.1 | conexiunea din browser |
 | unittest | inclus în Python | teste automate (fără dependențe în plus) |
-| uv | ≥ 0.12 | gestionarea mediului și a dependențelor |
+| uv | ≥ 0.12 | gestionarea mediului și a dependențelor (recomandat) |
+| venv + pip | incluse în Python | alternativă la uv, folosind `requirements.txt` |
 
 ### Modelul de date
 
@@ -202,8 +203,10 @@ Logica de stocare, rutele HTTP, evenimentele în timp real și interfața sunt s
 
 ```
 minichat/
+├── deploy.py              # instalare și pornire, cu uv sau cu venv + pip
 ├── run.py                 # punct de intrare: rulează testele, apoi pornește serverul
 ├── pyproject.toml         # dependențele proiectului (uv.lock: versiunile exacte)
+├── requirements.txt       # aceleași versiuni exacte, pentru pip (generat din uv.lock)
 ├── app/
 │   ├── __init__.py        # aplicația Flask: configurare, blueprint-uri, crearea tabelelor
 │   ├── config.py          # configurația demonstrativă
@@ -260,8 +263,9 @@ Exemple pentru categoriile cerute de subiect:
 Rulare:
 
 ```bash
-uv run python -m tests      # doar testele, cu rezultate formatate
-uv run run.py               # testele rulează automat înainte de pornirea serverului
+python3 deploy.py --no-start   # instalează dependențele și rulează doar testele
+uv run python -m tests         # doar testele, cu rezultate formatate
+uv run run.py                  # testele rulează automat înainte de pornirea serverului
 ```
 
 Dacă un test eșuează, serverul nu pornește și se afișează eroarea completă. Pentru a porni totuși serverul: `uv run run.py --skip-tests`.
@@ -271,36 +275,103 @@ Dacă un test eșuează, serverul nu pornește și se afișează eroarea complet
 - Depozitul Git cu codul sursă: <https://github.com/kommanderm/Proiect_Python_Poli>
 - Configurația demonstrativă: `app/config.py`. Baza de date se creează automat la prima rulare.
 - Testele automate din `tests/`.
+- Scriptul de deploy `deploy.py` și lista dependențelor: `requirements.txt` pentru pip, `uv.lock` pentru uv.
 - Acest fișier README cu instalarea, dependențele, rularea și sursele.
 - O scurtă prezentare _(de completat)_.
 
 ---
 
-## Instalare și rulare
+## Instalare, deploy și rulare
 
 ### Cerințe
 
-- Python **3.14** sau mai nou
-- [uv](https://docs.astral.sh/uv/) (recomandat)
+Există două variante de instalare:
 
-### Cu uv (recomandat)
+- **cu [uv](https://docs.astral.sh/uv/)** (recomandat): este nevoie doar de uv, care descarcă singur Python 3.14 dacă lipsește;
+- **cu venv + pip**: este nevoie de Python **3.14** sau mai nou, instalat pe sistem.
+
+Ambele variante instalează exact aceleași versiuni ale pachetelor.
+
+### Deploy cu un singur pas (recomandat)
 
 ```bash
 git clone https://github.com/kommanderm/Proiect_Python_Poli.git
 cd Proiect_Python_Poli
-uv sync            # creează .venv și instalează dependențele din uv.lock
+python3 deploy.py        # Windows: py deploy.py
+```
+
+`deploy.py` folosește doar biblioteca standard, deci poate fi rulat cu orice Python 3.8+. Scriptul alege singur varianta de instalare: uv dacă este găsit în `PATH`, altfel venv + pip. Pașii sunt:
+
+| Pas | Cu uv | Cu venv + pip |
+|---|---|---|
+| 1. Mediul Python | `uv sync --locked` creează `.venv` cu Python 3.14 (îl descarcă dacă lipsește) | caută un Python ≥ 3.14 (`python3.14`, `python3`, `python`, pe Windows `py -3`) și creează `.venv` dacă nu există |
+| 2. Dependențele | instalate din `uv.lock` | `pip install -r requirements.txt` în `.venv` |
+| 3. Testele | rulate de `run.py` înainte de pornire | la fel |
+| 4. Serverul | pornește pe portul 5000 (`Ctrl+C` îl oprește) | la fel |
+
+Scriptul poate fi rulat de câte ori este nevoie. Refolosește `.venv`, instalează doar ce lipsește, iar baza de date `db.sqlite` rămâne neatinsă.
+
+Opțiuni:
+
+| Opțiune | Efect |
+|---|---|
+| `--mode auto` | implicit: uv dacă este instalat, altfel venv + pip |
+| `--mode uv` | forțează uv (eroare clară dacă uv nu este instalat) |
+| `--mode pip` | forțează venv + pip, chiar dacă uv este instalat |
+| `--no-start` | instalează și rulează testele, fără să pornească serverul (util pentru verificare) |
+| `--skip-tests` | pornește serverul fără să ruleze testele |
+
+Exemple:
+
+```bash
+python3 deploy.py --mode pip               # instalare clasică, fără uv
+python3 deploy.py --no-start               # verificare: instalare + teste
+python3 deploy.py --mode uv --skip-tests   # pornire rapidă cu uv
+```
+
+### Fișierul `requirements.txt`
+
+`requirements.txt` listează toate cele 17 pachete instalabile, inclusiv dependențele indirecte, cu versiuni fixe (`==`). Este generat din `uv.lock`, deci uv și pip instalează exact aceleași versiuni. După orice schimbare a dependențelor (de exemplu `uv add <pachet>`), fișierul se regenerează cu:
+
+```bash
+uv export --locked --format requirements.txt --no-hashes --no-emit-project -o requirements.txt
+```
+
+### Instalare manuală (fără script)
+
+Cu uv:
+
+```bash
+uv sync --locked   # creează .venv și instalează dependențele din uv.lock
 uv run run.py      # rulează testele, apoi pornește serverul pe portul 5000
 ```
 
-### Fără uv
+Cu venv + pip (Linux/macOS):
 
 ```bash
 python3.14 -m venv .venv
-.venv/bin/pip install flask flask-socketio flask-sqlalchemy
+.venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python run.py
 ```
 
-Serverul trebuie pornit dintr-un terminal. Serverul de dezvoltare Werkzeug refuză să pornească fără un terminal interactiv.
+Cu venv + pip (Windows, PowerShell):
+
+```powershell
+py -3.14 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe run.py
+```
+
+### Probleme frecvente
+
+| Mesaj | Cauză și soluție |
+|---|---|
+| `ensurepip is not available` | Pe Debian/Ubuntu, Python vine fără `ensurepip`. `deploy.py` ocolește problema singur: creează `.venv` fără pip și instalează pachetele cu pip-ul sistemului. Dacă nici acesta nu există: `sudo apt install python3.14-venv` |
+| `Python 3.14+ was not found` | Instalați Python 3.14 sau instalați uv, care îl descarcă singur |
+| `.venv uses Python 3.x` | `.venv` a fost creat cu un Python prea vechi: ștergeți folderul `.venv` și rulați din nou `deploy.py` |
+| `Address already in use` | Portul 5000 este ocupat, de obicei de un server MiniChat pornit deja: opriți-l |
+| `The Werkzeug web server is not designed to run in production` | Serverul trebuie pornit dintr-un terminal interactiv, nu în fundal |
+| Celelalte dispozitive din rețea nu se pot conecta | Permiteți portul 5000 în firewall (de exemplu `sudo ufw allow 5000/tcp`) |
 
 ### Configurare
 
@@ -326,7 +397,7 @@ Pași:
 2. În clientul 1, creați camera `general`. În celelalte ferestre camera apare în _Other rooms_: apăsați _Join_.
 3. Trimiteți mesaje și observați că apar în toate ferestrele, cu autorul și ora.
 4. Opriți serverul (`Ctrl+C`): clienții afișează _„Connection lost, retrying…”_.
-5. Reporniți serverul (`uv run run.py`): clienții se reconectează singuri, iar istoricul este păstrat.
+5. Reporniți serverul (`python3 deploy.py` sau `uv run run.py`): clienții se reconectează singuri, iar istoricul este păstrat.
 6. Apăsați _Log out_, apoi _Log in_ cu ID-ul notat. Utilizatorul și camerele lui sunt aceleași.
 
 Opțional, din alte dispozitive din aceeași rețea, deschideți `http://<IP-ul laptopului>:5000`. Serverul afișează adresa la pornire.
