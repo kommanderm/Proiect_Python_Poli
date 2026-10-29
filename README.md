@@ -383,9 +383,32 @@ Valorile din `app/config.py` pot fi suprascrise prin variabile de mediu cu prefi
 | `SECRET_KEY` | `change_in_prod` | `FLASK_SECRET_KEY=o-cheie-lunga-si-aleatoare` |
 | `PERMANENT_SESSION_LIFETIME` | 7 zile | — |
 
+### Atenție: o sesiune pe browser
+
+> [!WARNING]
+> Autentificarea se face prin **sesiunea Flask**, păstrată într-un cookie în browser timp de **7 zile**. Toate filele și ferestrele aceluiași browser (același profil) folosesc **același cookie**, deci **același utilizator**. Pentru ca mai mulți utilizatori să comunice local prin server, fiecare are nevoie de **un browser diferit** sau de **o fereastră incognito/privată**.
+
+Ce înseamnă asta în practică:
+
+- **O filă nouă nu înseamnă un utilizator nou.** A doua filă deschisă în același browser este deja autentificată ca același utilizator.
+- **Autentificarea ca alt utilizator îl înlocuiește pe cel vechi în tot browserul.** O filă deschisă mai devreme afișează în continuare vechiul nume și trimite mesaje ca vechiul utilizator, până la reîncărcare. În același timp, cererile ei HTTP (lista de camere, istoricul, verificarea permisiunii) folosesc deja noul utilizator. O astfel de filă amestecă două identități: reîncărcați-o (`F5`).
+- **Închiderea filei nu deconectează utilizatorul.** Sesiunea rămâne activă 7 zile. Doar _Log out_ o încheie, și atunci o încheie în toate filele acelui browser.
+- **Ferestrele incognito ale aceluiași browser împart o singură sesiune**, separată de cea a ferestrelor normale. Un browser oferă deci cel mult doi utilizatori: unul în ferestrele normale și unul în cele incognito. Închiderea tuturor ferestrelor incognito șterge sesiunea lor, așa că păstrați ID-ul pentru a vă autentifica din nou.
+
+Cum obțineți utilizatori separați pe același laptop:
+
+| Metodă | Exemplu | Sesiuni separate |
+|---|---|---|
+| Browsere diferite | Firefox, Chrome, Edge | câte una pentru fiecare browser |
+| Fereastră incognito / privată | `Ctrl+Shift+N` (Chrome, Edge), `Ctrl+Shift+P` (Firefox) | încă una pentru fiecare browser |
+| Profiluri de browser diferite | un al doilea profil în Chrome sau Firefox | câte una pentru fiecare profil |
+| Altă adresă pentru același server | <http://127.0.0.1:5000>, <http://localhost:5000>, `http://<IP-ul laptopului>:5000` | câte una pentru fiecare adresă, pentru că browserul păstrează cookie-urile separat pentru fiecare adresă |
+
+Telefoanele și celelalte dispozitive din rețea au fiecare propria sesiune, deci nu sunt afectate.
+
 ### Demonstrație: server și 2–3 clienți pe același laptop
 
-Ferestrele aceluiași browser împart aceeași sesiune. Pentru utilizatori diferiți pe același laptop, deschideți:
+Ferestrele aceluiași browser împart aceeași sesiune (vezi [Atenție: o sesiune pe browser](#atenție-o-sesiune-pe-browser)). Pentru utilizatori diferiți pe același laptop, deschideți:
 
 1. **Clientul 1:** <http://127.0.0.1:5000>
 2. **Clientul 2:** <http://localhost:5000> (alt nume de gazdă, deci altă sesiune)
