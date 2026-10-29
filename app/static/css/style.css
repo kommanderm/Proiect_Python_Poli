@@ -1,0 +1,189 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+code {
+  font-family: ui-monospace, monospace;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.error {
+  color: #d33;
+  min-height: 1.2em;
+  margin: 4px 0 0;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+}
+
+.inline input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* login */
+
+.auth {
+  max-width: 360px;
+  margin: 10vh auto;
+  padding: 0 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid GrayText;
+  border-radius: 6px;
+}
+
+.card p {
+  margin: 0;
+}
+
+/* chat */
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid GrayText;
+}
+
+.topbar .who {
+  margin-left: auto;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 0;
+}
+
+.rooms {
+  padding: 8px 16px;
+  border-right: 1px solid GrayText;
+  overflow-y: auto;
+}
+
+.rooms h2 {
+  margin: 12px 0 4px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.rooms ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.rooms li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.room-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+button.room-name {
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.perm-none .room-name {
+  opacity: 0.6;
+}
+
+.rooms li.active .room-name {
+  font-weight: bold;
+}
+
+.chat {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px 16px;
+}
+
+#messages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#messages li {
+  padding: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+#messages time {
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+@media (max-width: 640px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .rooms {
+    max-height: 35vh;
+    border-right: 0;
+    border-bottom: 1px solid GrayText;
+  }
+
+  .topbar .who {
+    font-size: 0.85em;
+  }
+}

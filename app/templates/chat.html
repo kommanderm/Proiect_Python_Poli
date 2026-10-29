@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="app">
+  <header class="topbar">
+    <strong>minichat</strong>
+    <span class="who">{{ user.display_name }} · login id <code>{{ user.id }}</code></span>
+    <button id="logout">Log out</button>
+  </header>
+
+  <div class="layout">
+    <aside class="rooms">
+      <h2>Your rooms</h2>
+      <ul id="rooms-member"></ul>
+      <h2>Other rooms</h2>
+      <ul id="rooms-none"></ul>
+      <form id="create-room-form" class="inline">
+        <input name="display_name" placeholder="New room" maxlength="32" required autocomplete="off">
+        <button>Create</button>
+      </form>
+    </aside>
+
+    <main class="chat">
+      <h2 id="room-title">Pick a room</h2>
+      <ul id="messages"></ul>
+      <form id="message-form" class="inline" hidden>
+        <input name="content" placeholder="Message" maxlength="1000" required autocomplete="off">
+        <button>Send</button>
+      </form>
+      <p id="error" class="error" role="alert"></p>
+    </main>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+{% endblock %}

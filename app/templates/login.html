@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block body %}
+<main class="auth">
+  <h1>minichat</h1>
+
+  <form id="register-form" class="card">
+    <h2>Register</h2>
+    <input name="display_name" placeholder="Display name" maxlength="32" required autocomplete="off">
+    <button>Register</button>
+  </form>
+
+  <section id="registered" class="card" hidden>
+    <h2>You're registered</h2>
+    <p>Your login id is <code id="new-id"></code></p>
+    <p>Save it: it is the only way to log back in.</p>
+    <a href="/">Continue to chat</a>
+  </section>
+
+  <form id="login-form" class="card">
+    <h2>Log in</h2>
+    <input name="id" placeholder="Login id" required autocomplete="off">
+    <button>Log in</button>
+  </form>
+
+  <p id="error" class="error" role="alert"></p>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/login.js') }}"></script>
+{% endblock %}
