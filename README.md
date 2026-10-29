@@ -1,8 +1,8 @@
 # MiniChat — mesagerie locală cu istoric
 
-**Subiectul 44** · Aplicații client-server · Python 3.14 · Flask + Socket.IO + SQLite
+**Subiectul 44** · MiniChat - camere tematice · Python 3.14 · Flask + Socket.IO + SQLite
 
-MiniChat este o aplicație de chat pe camere, cu server Python local și client web. Serverul și două-trei ferestre-client rulează pe același laptop, fără internet. Mesajele se păstrează în SQLite și se recuperează după o deconectare.
+Aplicație de chat pe camere, cu server Python local și client web. Serverul și două-trei ferestre-client rulează pe același laptop, fără internet. Mesajele se păstrează în SQLite și se recuperează după o deconectare.
 
 ---
 
