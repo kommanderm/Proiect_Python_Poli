@@ -1,15 +1,18 @@
 from functools import wraps
 
 from flask import Blueprint, abort, jsonify, request, session
+from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import HTTPException
 
+from app import validation
 from app.db import Message, Permission, Room, User, db
 from app.socket import socket
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
-NAME_MAX_LENGTH = 32
 HISTORY_LIMIT = 100
+# out-of-range ids get a 404 from the router instead of overflowing SQLite's INTEGER
+ROOM = f"<int(min=1, max={validation.SQLITE_INTEGER_MAX}):room_id>"
 
 
 @api.errorhandler(HTTPException)
@@ -28,17 +31,15 @@ def login_required(view):
     return wrapper
 
 
-def json_field(name):
+def valid(check):
+    """Run a validator from app.validation on the JSON body; invalid input becomes a 400."""
     data = request.get_json(silent=True)
-    value = data.get(name) if isinstance(data, dict) else None
-    return value.strip() if isinstance(value, str) else ""
-
-
-def display_name_field():
-    name = json_field("display_name")
-    if not 1 <= len(name) <= NAME_MAX_LENGTH:
-        abort(400, f"display name must be 1-{NAME_MAX_LENGTH} characters")
-    return name
+    if not isinstance(data, dict):
+        abort(400, "the request body must be a JSON object")
+    try:
+        return check(data)
+    except validation.ValidationError as error:
+        abort(400, str(error))
 
 
 def start_session(user):
@@ -49,7 +50,7 @@ def start_session(user):
 
 @api.post("/register")
 def register():
-    user = User(id=User.new_id(), display_name=display_name_field())
+    user = User(id=User.new_id(), display_name=valid(validation.display_name))
     db.session.add(user)
     db.session.commit()
     start_session(user)
@@ -58,7 +59,7 @@ def register():
 
 @api.post("/login")
 def login():
-    user = db.session.get(User, json_field("id").lower())
+    user = db.session.get(User, valid(validation.login_id))
     if user is None:
         abort(401, "unknown login id")
     start_session(user)
@@ -87,17 +88,23 @@ def list_rooms(user):
 @api.post("/rooms")
 @login_required
 def create_room(user):
-    name = display_name_field()
-    if db.session.scalar(db.select(Room).filter_by(display_name=name)) is not None:
+    name = valid(validation.display_name)
+    # "General" and "general" would be two rooms nobody can tell apart
+    taken = {existing.casefold() for existing in db.session.scalars(db.select(Room.display_name))}
+    if name.casefold() in taken:
         abort(409, "a room with that name already exists")
     room = Room(display_name=name)
     user.rooms.append(room)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:  # created by someone else in the meantime
+        db.session.rollback()
+        abort(409, "a room with that name already exists")
     socket.emit("rooms_changed")
     return jsonify(room.to_dict(user)), 201
 
 
-@api.post("/rooms/<int:room_id>/join")
+@api.post(f"/rooms/{ROOM}/join")
 @login_required
 def join(user, room_id):
     room = db.get_or_404(Room, room_id, description="room not found")
@@ -107,7 +114,7 @@ def join(user, room_id):
     return jsonify(room.to_dict(user))
 
 
-@api.post("/rooms/<int:room_id>/leave")
+@api.post(f"/rooms/{ROOM}/leave")
 @login_required
 def leave(user, room_id):
     room = db.get_or_404(Room, room_id, description="room not found")
@@ -117,14 +124,14 @@ def leave(user, room_id):
     return jsonify(room.to_dict(user))
 
 
-@api.get("/rooms/<int:room_id>/permission")
+@api.get(f"/rooms/{ROOM}/permission")
 @login_required
 def permission(user, room_id):
     room = db.get_or_404(Room, room_id, description="room not found")
     return jsonify(room_id=room.id, permission=user.permission(room))
 
 
-@api.get("/rooms/<int:room_id>/messages")
+@api.get(f"/rooms/{ROOM}/messages")
 @login_required
 def messages(user, room_id):
     room = db.get_or_404(Room, room_id, description="room not found")

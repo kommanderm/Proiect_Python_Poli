@@ -63,9 +63,23 @@ class CreateRoomTests(AppTestCase):
         self.assertError(self.client.post("/api/rooms", json={"display_name": "general"}), 409)
         self.assertEqual(len(self.client.get("/api/rooms").get_json()), 1)
 
+    def test_duplicate_check_ignores_case_and_invisible_characters(self):
+        self.register()
+        self.create_room("general")
+        for name in ["General", "GENERAL", "gen​eral", " general\t"]:
+            with self.subTest(name=name):
+                self.assertError(self.client.post("/api/rooms", json={"display_name": name}), 409)
+        self.assertEqual(len(self.client.get("/api/rooms").get_json()), 1)
+
+    def test_room_name_is_sanitised(self):
+        self.register()
+        self.assertEqual(self.create_room("  proiect\x00 ‮ python ")["display_name"], "proiect python")
+
     def test_rejects_invalid_names(self):
         self.register()
-        for body in [None, {}, {"display_name": ""}, {"display_name": "   "}, {"display_name": "x" * 33}]:
+        bodies = [None, {}, ["general"], {"display_name": ""}, {"display_name": "   "},
+                  {"display_name": "​"}, {"display_name": 7}, {"display_name": "x" * 33}]
+        for body in bodies:
             with self.subTest(body=body):
                 self.assertError(self.client.post("/api/rooms", json=body), 400)
         self.assertEqual(self.client.get("/api/rooms").get_json(), [])
@@ -209,3 +223,17 @@ class RoomMessagesTests(RoomTestCase):
         self.add_messages(self.room["id"], self.owner["id"], *(f"m{i}" for i in range(total)))
         contents = [m["content"] for m in self.messages()]
         self.assertEqual(contents, [f"m{i}" for i in range(5, total)])
+
+
+class RoomIdTests(RoomTestCase):
+    ROUTES = [("post", "join"), ("post", "leave"), ("get", "permission"), ("get", "messages")]
+
+    def test_out_of_range_ids_are_not_found(self):
+        for room_id in ["0", "-1", "9223372036854775808", "99999999999999999999", "1.5", "1e3"]:
+            for method, route in self.ROUTES:
+                with self.subTest(room_id=room_id, route=route):
+                    response = getattr(self.client, method)(f"/api/rooms/{room_id}/{route}")
+                    self.assertEqual(response.status_code, 404)
+
+    def test_largest_id_is_a_normal_404(self):
+        self.assertError(self.client.get("/api/rooms/9223372036854775807/permission"), 404)

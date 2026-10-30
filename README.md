@@ -26,7 +26,7 @@ Un grup mic (de exemplu, o echipă la laborator) are nevoie de o mesagerie care 
 1. **Server local cu validare.** Fiecare mesaj este acceptat doar dacă expeditorul are o sesiune validă și este membru al camerei. Serverul atribuie fiecărui mesaj un ID și un marcaj temporal UTC și respinge textul gol sau mai lung de 1000 de caractere.
 2. **Istoric persistent.** Toate mesajele se salvează în SQLite. La deschiderea unei camere și după fiecare reconectare se reîncarcă ultimele 100 de mesaje, fără dubluri.
 3. **Mesaje în timp real, fără blocarea interfeței.** Socket.IO livrează mesajele (WebSocket, cu interogare periodică ca rezervă) pentru minimum 3 clienți simultani.
-4. **Calitate verificată automat.** O suită de 81 de teste automate acoperă toate rutele HTTP și toate evenimentele Socket.IO. Suita rulează la fiecare pornire a serverului.
+4. **Calitate verificată automat.** O suită de 116 teste automate acoperă toate rutele HTTP și toate evenimentele Socket.IO. Suita rulează la fiecare pornire a serverului.
 
 ### Limitele proiectului (scope limitations)
 
@@ -68,7 +68,7 @@ Un grup mic (de exemplu, o echipă la laborator) are nevoie de o mesagerie care 
 | Identitate fictivă cu ID stabil | ✅ | ID de 12 caractere hex, generat la înregistrare și folosit la autentificare |
 | Serverul verifică expeditorul și apartenența la conversație | ✅ | Expeditorul este luat din sesiunea semnată, nu din datele trimise de client. Apartenența se verifică în `user_in_room` la fiecare mesaj |
 | ID și marcaj temporal atribuite de server | ✅ | `message.id` (autoincrement) și `message.sent_at` (UTC) |
-| Respingerea textului gol sau prea lung | ✅ | 1–1000 de caractere după eliminarea spațiilor de la capete; altfel răspuns `{"ok": false, "error": ...}` |
+| Respingerea textului gol sau prea lung | ✅ | 1–1000 de caractere după curățare (vezi [Validarea datelor primite](#interfața-serverului)); altfel răspuns `{"ok": false, "error": ...}` |
 | Trimitere și primire fără blocarea interfeței | ✅ | Socket.IO asincron; o coadă de promisiuni păstrează ordinea de sosire |
 | Ordinea stabilită de server | ✅ | Istoricul este ordonat după `message.id`, nu după ceasul clientului |
 | Mesaje salvate în SQLite | ✅ | Tabelul `message` |
@@ -79,7 +79,7 @@ Un grup mic (de exemplu, o echipă la laborator) are nevoie de o mesagerie care 
 | Starea conexiunii și mesaje clare la oprirea serverului | 🟡 Parțial | Mesajul „Connection lost, retrying…” la pierderea conexiunii. Lipsește un indicator permanent de stare |
 | Un mesaj neconfirmat nu apare ca trimis | ✅ | Mesajul apare doar după ce serverul îl salvează și îl difuzează. Câmpul de text se golește doar după confirmare |
 | Adnotări de tip | ⏳ Planificat | |
-| Teste automate: flux normal, caz-limită, caz de eroare | ✅ | 81 de teste, vezi [Strategia de testare](#strategia-de-testare) |
+| Teste automate: flux normal, caz-limită, caz de eroare | ✅ | 116 teste, vezi [Strategia de testare](#strategia-de-testare) |
 | Regula variantei alese (44A/44B) | ⏳ | _de completat după alegerea variantei_ |
 
 ### Scenarii de utilizare (fluxuri)
@@ -169,7 +169,7 @@ Permisiunea unui utilizator într-o cameră este derivată din `user_in_room`: `
 
 ### Interfața serverului
 
-**API HTTP (JSON).** Erorile au forma `{"error": "..."}`, cu codurile 400, 401, 403, 404 și 409.
+**API HTTP (JSON).** Erorile au forma `{"error": "..."}`, cu codurile 400, 401, 403, 404, 409 și 413.
 
 | Metodă | Rută | Descriere |
 |---|---|---|
@@ -197,6 +197,18 @@ Permisiunea unui utilizator într-o cameră este derivată din `user_in_room`: `
 
 **Securitate.** ID-ul de autentificare nu este trimis niciodată altor utilizatori, iar mesajele conțin doar numele afișat. Tot textul primit este afișat ca text simplu (`textContent`), deci HTML-ul din mesaje nu se execută.
 
+**Validarea datelor primite.** Tot ce trimite clientul, prin API-ul HTTP sau prin Socket.IO, trece prin `app/validation.py`:
+
+- textul este normalizat Unicode (NFC), iar caracterele de control, caracterele invizibile (de exemplu spațiul de lățime zero sau cele care inversează direcția textului) și surogatele izolate sunt eliminate;
+- numele de utilizatori și de camere au spațiile comprimate; mesajele își păstrează rândurile noi, cu cel mult un rând gol consecutiv;
+- lungimea (1–32 de caractere pentru nume, 1–1000 pentru mesaje) se verifică după curățare;
+- ID-ul de autentificare trebuie să aibă exact 12 caractere hexazecimale, iar ID-ul unei camere trebuie să fie un întreg pozitiv care încape în SQLite;
+- două camere nu pot avea același nume, indiferent de majuscule;
+- corpurile de cerere HTTP mai mari de 16 KB primesc 413, iar pachetele Socket.IO sunt limitate la 64 KB;
+- orice eroare apărută într-un eveniment Socket.IO primește tot un răspuns `{ok: false, error}`, deci clientul nu rămâne blocat.
+
+HTML-ul nu este eliminat din text: se păstrează așa cum a fost scris și este afișat ca text simplu.
+
 ### Arhitectura codului
 
 Logica de stocare, rutele HTTP, evenimentele în timp real și interfața sunt separate în module distincte:
@@ -210,6 +222,7 @@ minichat/
 ├── app/
 │   ├── __init__.py        # aplicația Flask: configurare, blueprint-uri, crearea tabelelor
 │   ├── config.py          # configurația demonstrativă
+│   ├── validation.py      # curățarea și validarea datelor primite de la client
 │   ├── db/db.py           # stocare: modelele User, Room, Message, user_in_room, Permission
 │   ├── routes/__init__.py # pagina principală (autentificare sau chat)
 │   ├── routes/api.py      # API-ul HTTP JSON
@@ -224,7 +237,8 @@ minichat/
     ├── test_pages.py      # pagina principală și fișierele statice
     ├── test_auth.py       # înregistrare, autentificare, deconectare, sesiune
     ├── test_rooms.py      # camere, permisiuni, istoric
-    └── test_socket.py     # conexiune și evenimente Socket.IO
+    ├── test_socket.py     # conexiune și evenimente Socket.IO
+    └── test_validation.py # curățarea și validarea datelor
 ```
 
 Adresa serverului nu este scrisă în cod: clientul o construiește din `document.domain` și `location.port`, deci funcționează la orice adresă de pe care a fost deschisă pagina.
@@ -240,7 +254,7 @@ Adresa serverului nu este scrisă în cod: clientul o construiește din `documen
 | 1. Design și baza de date | structura tabelelor, modelele SQLAlchemy | ✅ |
 | 2. Logica backend | API HTTP, sesiuni, evenimente Socket.IO, validări | ✅ |
 | 3. Interfață și integrare | paginile de autentificare și chat, reconectare | ✅ |
-| 4. Testare și documentare | 81 de teste automate, runner formatat, README | ✅ |
+| 4. Testare și documentare | 116 teste automate, runner formatat, README | ✅ |
 | 5. Conformitate completă cu subiectul | identificator de operație contra duplicatelor, reluare după ultimul ID, indicator de stare a conexiunii, adnotări de tip, regula variantei, date demonstrative | ⏳ |
 
 ### Strategia de testare
@@ -250,9 +264,10 @@ Testele folosesc `unittest` din biblioteca standard. Fiecare test pornește de l
 | Fișier | Teste | Acoperă |
 |---|---|---|
 | `test_pages.py` | 8 | pagina de autentificare și de chat, escaparea HTML, fișierele statice |
-| `test_auth.py` | 18 | înregistrare, autentificare, deconectare, `/api/me`, durata sesiunii |
-| `test_rooms.py` | 32 | creare, listare, join/leave, permisiuni, istoric (ordine, limită, izolare) |
-| `test_socket.py` | 23 | conexiune, `enter_room`, `exit_room`, `send_message`, difuzare |
+| `test_auth.py` | 23 | înregistrare, autentificare, deconectare, `/api/me`, durata sesiunii, nume curățate, ID-uri invalide |
+| `test_rooms.py` | 36 | creare, listare, join/leave, permisiuni, istoric (ordine, limită, izolare), ID-uri de cameră invalide |
+| `test_socket.py` | 31 | conexiune, `enter_room`, `exit_room`, `send_message`, difuzare, date invalide, erori neprevăzute |
+| `test_validation.py` | 18 | curățarea textului, nume, mesaje, ID-uri de autentificare și de cameră |
 
 Exemple pentru categoriile cerute de subiect:
 

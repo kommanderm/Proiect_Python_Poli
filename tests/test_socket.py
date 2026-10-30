@@ -1,4 +1,6 @@
-from app.socket.socket import MESSAGE_MAX_LENGTH
+from unittest import mock
+
+from app.validation import MESSAGE_MAX_LENGTH
 from tests import AppTestCase, Message, app, db, socket
 
 
@@ -82,9 +84,22 @@ class EnterRoomTests(SocketTestCase):
 
     def test_rejects_bad_payloads(self):
         room_id = self.room["id"]
-        for data in [None, {}, {"room_id": None}, {"room_id": str(room_id)}, {"room_id": 999}, "general", [room_id]]:
+        bad = [None, {}, {"room_id": None}, {"room_id": str(room_id)}, {"room_id": 999}, "general", [room_id],
+               {"room_id": 0}, {"room_id": -1}, {"room_id": 1.0}, {"room_id": 2**63}, {"room_id": 2**80}]
+        for data in bad:
             with self.subTest(data=data):
                 self.assertRefused(self.alice_socket.emit("enter_room", data, callback=True))
+
+    def test_true_is_not_room_one(self):
+        self.assertEqual(self.room["id"], 1)
+        self.assertRefused(self.alice_socket.emit("enter_room", {"room_id": True}, callback=True))
+
+    def test_missing_payload_still_gets_an_answer(self):
+        self.assertRefused(self.alice_socket.emit("enter_room", callback=True))
+
+    def test_extra_arguments_are_ignored(self):
+        reply = self.alice_socket.emit("enter_room", {"room_id": self.room["id"]}, "extra", callback=True)
+        self.assertEqual(reply, {"ok": True})
 
     def test_messages_arrive_only_after_entering(self):
         _, bob_socket = self.member("bob")
@@ -146,6 +161,34 @@ class SendMessageTests(SocketTestCase):
         self.send(self.alice_socket, "  hi  ")
         self.assertEqual(self.stored(), ["hi"])
 
+    def test_content_is_sanitised(self):
+        # NUL and a right-to-left override are dropped, line breaks kept, long gaps shortened
+        self.send(self.alice_socket, "hello\x00 ‮world  \r\n\r\n\r\n\r\nbye")
+        self.assertEqual(self.stored(), ["hello world\n\nbye"])
+
+    def test_html_is_stored_as_typed(self):
+        # escaping happens when it is displayed (textContent), not by mangling the text
+        self.send(self.alice_socket, "<b>hi</b> & <3")
+        self.assertEqual(self.stored(), ["<b>hi</b> & <3"])
+
+    def test_lone_surrogate_does_not_crash(self):
+        self.assertEqual(self.send(self.alice_socket, "a\ud800b"), {"ok": True})
+        self.assertEqual(self.stored(), ["ab"])
+
+    def test_length_is_counted_after_sanitising(self):
+        padded = "​" * 50 + "x" * MESSAGE_MAX_LENGTH + "\x00" * 50
+        self.assertEqual(self.send(self.alice_socket, padded), {"ok": True})
+
+    def test_unexpected_error_still_gets_an_answer(self):
+        self.enter(self.alice_socket)
+        with mock.patch.object(db.session, "commit", side_effect=RuntimeError("disk full")), \
+                self.assertLogs(app.logger, "ERROR"):
+            reply = self.send(self.alice_socket, "hi")
+        self.assertEqual(reply, {"ok": False, "error": "internal server error"})
+        self.assertEqual(received_messages(self.alice_socket), [])
+        self.assertEqual(self.send(self.alice_socket, "again"), {"ok": True})
+        self.assertEqual(self.stored(), ["again"])
+
     def test_accepts_max_length(self):
         self.assertEqual(self.send(self.alice_socket, "x" * MESSAGE_MAX_LENGTH), {"ok": True})
 
@@ -155,7 +198,7 @@ class SendMessageTests(SocketTestCase):
 
     def test_rejects_invalid_content(self):
         self.enter(self.alice_socket)
-        for content in [None, "", "   ", 42, ["hi"]]:
+        for content in [None, "", "   ", 42, ["hi"], "​⁠", "\n\n\t"]:
             with self.subTest(content=content):
                 self.assertRefused(self.send(self.alice_socket, content))
         self.assertRefused(self.alice_socket.emit("send_message", {"room_id": self.room["id"]}, callback=True))
@@ -163,9 +206,12 @@ class SendMessageTests(SocketTestCase):
         self.assertEqual(received_messages(self.alice_socket), [])
 
     def test_rejects_bad_payloads(self):
-        for data in [None, {}, "hi", {"content": "hi"}, {"room_id": 999, "content": "hi"}]:
+        bad = [None, {}, "hi", {"content": "hi"}, {"room_id": 999, "content": "hi"},
+               {"room_id": True, "content": "hi"}, {"room_id": 2**80, "content": "hi"}]
+        for data in bad:
             with self.subTest(data=data):
                 self.assertRefused(self.alice_socket.emit("send_message", data, callback=True))
+        self.assertRefused(self.alice_socket.emit("send_message", callback=True))
         self.assertEqual(self.stored(), [])
 
     def test_non_member_cannot_send(self):

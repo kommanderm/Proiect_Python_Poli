@@ -33,6 +33,23 @@ class RegisterTests(AppTestCase):
         self.assertError(self.client.post("/api/register", data={"display_name": "alice"}), 400)
         self.assertError(self.client.get("/api/me"), 401)
 
+    def test_display_name_is_sanitised(self):
+        # zero-width space, bell, right-to-left override and a tab around the words
+        user = self.register("  An​a\x07 \t Pop‮a  ")
+        self.assertEqual(user["display_name"], "Ana Popa")
+
+    def test_rejects_name_made_only_of_invisible_characters(self):
+        self.assertError(self.client.post("/api/register", json={"display_name": "​⁦\x00"}), 400)
+
+    def test_lone_surrogate_does_not_crash(self):
+        response = self.client.post("/api/register", data='{"display_name": "a\\ud800b"}',
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.get_json()["display_name"], "ab")
+
+    def test_rejects_oversized_body(self):
+        self.assertError(self.client.post("/api/register", json={"display_name": "x" * 20_000}), 413)
+
     def test_display_names_need_not_be_unique(self):
         first = self.register("alice", client=self.new_client())
         second = self.register("alice")
@@ -66,10 +83,16 @@ class LoginTests(AppTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json()["id"], self.alice["id"])
 
-    def test_rejects_unknown_or_missing_id(self):
-        for body in [None, {}, {"id": ""}, {"id": 123}, {"id": "000000000000"}]:
+    def test_rejects_malformed_or_missing_id(self):
+        bodies = [None, {}, ["id"], {"id": ""}, {"id": 123}, {"id": "abc"},
+                  {"id": "zzzzzzzzzzzz"}, {"id": self.alice["id"] + "0"}, {"id": "0123 4567 89ab"}]
+        for body in bodies:
             with self.subTest(body=body):
-                self.assertError(self.client.post("/api/login", json=body), 401)
+                self.assertError(self.client.post("/api/login", json=body), 400)
+        self.assertError(self.client.get("/api/me"), 401)
+
+    def test_rejects_unknown_id(self):
+        self.assertError(self.client.post("/api/login", json={"id": "000000000000"}), 401)
         self.assertError(self.client.get("/api/me"), 401)
 
     def test_failed_login_keeps_current_session(self):

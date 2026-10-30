@@ -93,6 +93,8 @@ class PrettyResult(unittest.TestResult):
 
 
 def main():
+    # failure messages can contain lone surrogates (see the sanitising tests); print them escaped
+    sys.stdout.reconfigure(errors="backslashreplace")
     suite = unittest.defaultTestLoader.discover(str(TESTS_DIR), top_level_dir=str(TESTS_DIR.parent))
     result = PrettyResult(sys.stdout)
     result.write(result.paint("minichat tests", "1"))
