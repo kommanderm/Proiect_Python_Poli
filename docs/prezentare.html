@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>MiniChat — prezentare</title>
+<!--
+  Sursa documentului (A4, 4 pagini). Generare PDF din folderul docs/:
+    chromium --headless --no-pdf-header-footer --print-to-pdf=prezentare.pdf prezentare.html
+-->
+<style>
+  @page { size: A4; margin: 2.2cm 2.4cm; }
+
+  body {
+    margin: 0;
+    font-family: "Times New Roman", "Liberation Serif", serif;
+    font-size: 12pt;
+    line-height: 1.35;
+    color: #000;
+    background: #fff;
+  }
+
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+
+  .title { margin: 0 0 4pt; font-size: 17pt; font-weight: bold; text-align: center; }
+  .subtitle { margin: 0 0 14pt; text-align: center; }
+
+  h1 { margin: 0 0 8pt; font-size: 14pt; }
+  h2 { margin: 12pt 0 4pt; font-size: 12pt; }
+
+  p { margin: 0 0 6pt; text-align: justify; }
+  ul, ol { margin: 0 0 6pt; padding-left: 22pt; }
+  li { margin-bottom: 3pt; }
+
+  code, pre { font-family: "Courier New", "Liberation Mono", monospace; font-size: 10.5pt; }
+  pre { margin: 0 0 6pt; line-height: 1.3; }
+
+  table { width: 100%; margin: 0 0 6pt; border-collapse: collapse; }
+  th, td { padding: 3pt 5pt; border: 0.75pt solid #000; text-align: left; vertical-align: top; }
+  th { font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <p class="title">MiniChat – mesagerie locală cu istoric</p>
+  <p class="subtitle">Subiectul 44 – Aplicații client-server<br>
+    Echipa: Popa Ghita Didita Nicola Andra și Duna Bianca Stefania · Grupa 422C<br>
+    Repository: https://github.com/kommanderm/Proiect_Python_Poli</p>
+
+  <h1>1. Prezentare generală și obiective</h1>
+
+  <h2>Titlul proiectului și echipa</h2>
+  <p>Proiectul se numește <b>MiniChat</b> și este realizat de Popa Ghita Didita Nicola Andra și Duna Bianca Stefania (grupa 422C).</p>
+
+  <h2>Context și scop</h2>
+  <p>Un grup mic de utilizatori, de exemplu o echipă la laborator, are nevoie de o mesagerie care funcționează complet local: fără conturi în cloud și fără internet, cu un istoric care nu se pierde dacă un client sau serverul se oprește. MiniChat rezolvă această problemă printr-un server Python care rulează pe același laptop cu două sau trei ferestre-client. Utilizatorii țintă sunt utilizatori demonstrativi cu identități fictive, care schimbă mesaje în camere tematice.</p>
+
+  <h2>Obiective principale</h2>
+  <ol>
+    <li>Dezvoltarea unui server local care acceptă un mesaj doar de la o sesiune validă, membră a camerei, îi atribuie un ID și un marcaj temporal și respinge textul gol sau mai lung de 1000 de caractere.</li>
+    <li>Salvarea tuturor mesajelor în SQLite și reîncărcarea ultimelor 100 de mesaje la deschiderea unei camere și după reconectare, fără mesaje dublate.</li>
+    <li>Livrarea mesajelor în timp real, fără blocarea interfeței, pentru cel puțin trei clienți simultani.</li>
+    <li>Verificarea automată a tuturor rutelor HTTP și a evenimentelor Socket.IO prin 116 teste, rulate la fiecare pornire a serverului.</li>
+  </ol>
+
+  <h2>Limitele proiectului</h2>
+  <ul>
+    <li>Nu include parole sau autentificare OAuth2: utilizatorul se autentifică cu un ID generat la înregistrare.</li>
+    <li>Nu folosește HTTPS; aplicația este destinată doar aceluiași laptop sau aceleiași rețele locale.</li>
+    <li>Nu folosește stocare în cloud, ci un fișier SQLite local (<code>db.sqlite</code>).</li>
+    <li>Nu are roluri de administrator, ștergere sau editare de mesaje, fișiere atașate sau notificări.</li>
+    <li>Folosește serverul de dezvoltare Werkzeug, potrivit pentru demonstrație, nu pentru producție.</li>
+  </ul>
+</div>
+
+<div class="page">
+  <h1>2. Cerințe funcționale</h1>
+
+  <h2>Funcționalități</h2>
+  <p><b>Must-have (implementate):</b></p>
+  <ol>
+    <li>Înregistrare cu nume afișat; serverul generează un ID de autentificare de 12 caractere.</li>
+    <li>Autentificare cu ID-ul primit și deconectare; sesiunea este păstrată 7 zile.</li>
+    <li>Camere: creare, intrare (<i>Join</i>) și părăsire (<i>Leave</i>).</li>
+    <li>Lista camerelor împărțită după permisiune: camerele proprii și celelalte camere.</li>
+    <li>Trimiterea și primirea mesajelor în timp real, în camera selectată.</li>
+    <li>Istoric salvat în SQLite; la deschiderea camerei se încarcă ultimele 100 de mesaje.</li>
+    <li>Reconectare automată după oprirea serverului, cu reîncărcarea istoricului.</li>
+  </ol>
+  <p><b>În lucru</b> (cerințe ale subiectului încă neacoperite complet): un identificator de operație care împiedică dublarea unui mesaj trimis de două ori, reluarea citirii exact după ultimul ID primit, un indicator permanent al stării conexiunii și adnotări de tip în tot codul.</p>
+  <p><b>Nice-to-have:</b> contor de mesaje necitite pentru celelalte camere, paginarea istoricului mai vechi de 100 de mesaje, editarea sau ștergerea propriilor mesaje.</p>
+
+  <h2>Scenarii de utilizare</h2>
+  <ul>
+    <li><b>Înregistrare:</b> utilizatorul introduce un nume afișat -&gt; serverul validează numele și generează ID-ul -&gt; ID-ul este afișat o singură dată -&gt; sesiunea pornește.</li>
+    <li><b>Autentificare:</b> utilizatorul introduce ID-ul -&gt; serverul caută utilizatorul -&gt; sesiunea este creată -&gt; se deschide pagina de chat.</li>
+    <li><b>Trimiterea unui mesaj:</b> utilizatorul scrie mesajul -&gt; serverul verifică sesiunea, apartenența la cameră și lungimea textului -&gt; mesajul primește un ID și o oră și este salvat în SQLite -&gt; serverul îl trimite membrilor camerei -&gt; fiecare client verifică permisiunea și afișează mesajul.</li>
+    <li><b>Deconectare și reluare:</b> serverul se oprește -&gt; clientul afișează „Connection lost, retrying…” și reîncearcă -&gt; la revenire, clientul reintră în cameră și reîncarcă istoricul fără mesaje dublate.</li>
+  </ul>
+
+  <h2>Interfața cu utilizatorul</h2>
+  <p>Aplicația are o interfață web minimală, realizată cu Flask, HTML, CSS și JavaScript simplu. Clientul Socket.IO este inclus în proiect, deci nu este nevoie de internet. Există două pagini: pagina de autentificare (formularele <i>Register</i> și <i>Log in</i>) și pagina de chat (lista camerelor, conversația selectată cu autorul și ora fiecărui mesaj și formularul de trimitere).</p>
+  <p>Sesiunea este păstrată în browser, deci toate filele aceluiași browser aparțin aceluiași utilizator. Pentru mai mulți utilizatori pe același laptop se folosesc browsere diferite sau ferestre incognito.</p>
+</div>
+
+<div class="page">
+  <h1>3. Arhitectură, tehnologii și structura datelor</h1>
+
+  <h2>Stiva tehnologică</h2>
+  <ul>
+    <li>Python 3.14;</li>
+    <li>Flask 3.1 – server web, rute și sesiuni;</li>
+    <li>Flask-SocketIO 5.7 – mesaje în timp real;</li>
+    <li>Flask-SQLAlchemy 3.1 și SQLAlchemy 2.1 – acces la baza de date (ORM);</li>
+    <li>SQLite – baza de date locală;</li>
+    <li>Socket.IO 4.8.1 – clientul JavaScript din browser;</li>
+    <li>unittest – testele automate;</li>
+    <li>uv sau venv + pip – instalarea dependențelor (<code>uv.lock</code>, <code>requirements.txt</code>).</li>
+  </ul>
+
+  <h2>Modelul de date</h2>
+  <table>
+    <tr><th style="width: 18%">Tabel</th><th>Atribute</th><th style="width: 22%">Rol</th></tr>
+    <tr><td>user</td><td>id (text de 12 caractere, cheie primară), registered_at (data înregistrării), display_name (text, 1–32 caractere)</td><td>utilizatorii</td></tr>
+    <tr><td>room</td><td>id (întreg, cheie primară), display_name (text unic, 1–32 caractere)</td><td>camerele</td></tr>
+    <tr><td>user_in_room</td><td>user_id (referă user.id), room_id (referă room.id); cheie primară compusă</td><td>apartenența la camere</td></tr>
+    <tr><td>message</td><td>id (întreg, cheie primară, stabilește ordinea), room_id (referă room.id), user_id (referă user.id), content (text, 1–1000 caractere), sent_at (ora serverului, UTC)</td><td>mesajele</td></tr>
+  </table>
+  <p>Permisiunea unui utilizator într-o cameră este <i>member</i> dacă există rândul corespunzător în <code>user_in_room</code>, altfel <i>none</i>.</p>
+
+  <h2>Arhitectura codului</h2>
+  <p>Stocarea, rutele HTTP, evenimentele în timp real și interfața sunt separate în module distincte:</p>
+<pre>minichat/
+├── run.py              rulează testele, apoi pornește serverul
+├── deploy.py           instalează dependențele (uv sau pip) și pornește aplicația
+├── requirements.txt    dependențele pentru pip
+├── app/
+│   ├── __init__.py     aplicația Flask
+│   ├── config.py       configurația
+│   ├── validation.py   validarea datelor primite
+│   ├── db/             modelele și stocarea (SQLAlchemy)
+│   ├── routes/         API-ul HTTP
+│   ├── socket/         evenimentele Socket.IO
+│   ├── templates/      paginile HTML
+│   └── static/         CSS și JavaScript
+└── tests/              testele automate</pre>
+</div>
+
+<div class="page">
+  <h1>4. Planificare, testare și livrabile</h1>
+
+  <h2>Etape de implementare</h2>
+  <ul>
+    <li><b>Faza 1 – Design și structura bazei de date:</b> tabelele și modelele SQLAlchemy. Finalizată.</li>
+    <li><b>Faza 2 – Implementarea logicii backend:</b> API-ul HTTP, sesiunile, evenimentele Socket.IO și validările. Finalizată.</li>
+    <li><b>Faza 3 – Interfață și integrare:</b> paginile de autentificare și chat, reconectarea automată. Finalizată.</li>
+    <li><b>Faza 4 – Testare și documentare:</b> testele automate, scriptul de instalare și README. Finalizată.</li>
+    <li><b>Faza 5 – Cerințele rămase ale subiectului:</b> identificatorul de operație, reluarea după ultimul ID, indicatorul de conexiune și adnotările de tip. În lucru.</li>
+  </ul>
+
+  <h2>Strategia de testare</h2>
+  <p>Aplicația este verificată cu 116 teste automate scrise cu <code>unittest</code>. Testele folosesc o bază SQLite în memorie, deci baza reală nu este modificată. Ele rulează automat la fiecare pornire (<code>python run.py</code>); dacă un test eșuează, serverul nu pornește. Testele acoperă:</p>
+  <ul>
+    <li><b>fluxul normal:</b> un mesaj trimis ajunge la toți membrii camerei și apare identic în istoric;</li>
+    <li><b>cazuri-limită:</b> un mesaj de exact 1000 de caractere este acceptat, iar istoricul returnează doar ultimele 100 de mesaje;</li>
+    <li><b>cazuri de eroare:</b> mesajele goale, prea lungi sau trimise de utilizatori care nu sunt membri sunt respinse și nu se salvează; datele invalide (ID-uri greșite, caractere de control sau invizibile) sunt respinse sau curățate.</li>
+  </ul>
+  <p>Testele sunt împărțite în cinci fișiere: paginile (8 teste), autentificarea (23), camerele și istoricul (36), evenimentele Socket.IO (31) și validarea datelor (18).</p>
+
+  <h2>Instalare și rulare</h2>
+<pre>git clone https://github.com/kommanderm/Proiect_Python_Poli.git
+cd Proiect_Python_Poli
+python3 deploy.py</pre>
+  <p>Scriptul folosește uv dacă este instalat, altfel creează un mediu virtual și instalează pachetele cu pip. Apoi rulează testele și pornește serverul pe portul 5000.</p>
+
+  <h2>Livrabile finale</h2>
+  <ul>
+    <li>repository Git cu codul sursă;</li>
+    <li>fișierul README.md cu instrucțiuni de instalare, dependențe, rulare și surse;</li>
+    <li>testele automate din directorul <code>tests/</code>;</li>
+    <li>scriptul de instalare <code>deploy.py</code> și fișierul <code>requirements.txt</code>;</li>
+    <li>această prezentare.</li>
+  </ul>
+</div>
+
+</body>
+</html>

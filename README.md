@@ -292,7 +292,7 @@ Dacă un test eșuează, serverul nu pornește și se afișează eroarea complet
 - Testele automate din `tests/`.
 - Scriptul de deploy `deploy.py` și lista dependențelor: `requirements.txt` pentru pip, `uv.lock` pentru uv.
 - Acest fișier README cu instalarea, dependențele, rularea și sursele.
-- O scurtă prezentare _(de completat)_.
+- O scurtă prezentare: [`docs/prezentare.pdf`](docs/prezentare.pdf), generată din `docs/prezentare.html`.
 
 ---
 
